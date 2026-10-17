@@ -240,8 +240,18 @@ for vid in index_data.values():
 all_categories = sorted(list(all_categories))
 
 # Sidebar Configuration
-st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/c/c5/BAPS_Logo.svg/512px-BAPS_Logo.svg.png", width=65)
-st.sidebar.title("Ashirwad Archive")
+if img_portrait:
+    st.sidebar.markdown(f"""
+    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 14px;">
+        <img src="{img_portrait}" style="width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid #f59e0b; box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);" alt="Mahant Swami Maharaj" />
+        <div>
+            <h3 style="margin: 0; font-size: 1.15rem; color: #f8fafc; font-weight: 700;">Ashirwad Archive</h3>
+            <p style="margin: 0; font-size: 0.8rem; color: #fbbf24;">મહંત સ્વામી મહારાજ</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    st.sidebar.title("Ashirwad Archive")
 st.sidebar.caption("Continuous Intelligent Indexer & Spiritual Explorer")
 
 st.sidebar.divider()

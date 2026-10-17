@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import time
 import tempfile
@@ -319,6 +320,11 @@ def main():
     return len(pending)
 
 if __name__ == "__main__":
+    if os.getenv("RUN_ONCE", "false").lower() in ("true", "1") or "--once" in sys.argv:
+        print("[MODE] Running single scan pass (Cloud Cron / GitHub Actions)...")
+        main()
+        sys.exit(0)
+        
     while True:
         pending_count = 0
         try:
