@@ -39,7 +39,10 @@ def translate_on_the_fly(summary_en):
     # 1. Try Groq fast models (qwen3.8-27b has full unmetered quota)
     try:
         from groq import Groq
-        keys = [k.strip() for k in os.getenv('GROQ_API_KEYS', '').split(',') if k.strip()]
+        raw_groq = st.secrets.get("GROQ_API_KEYS", "") if hasattr(st, "secrets") else ""
+        if not raw_groq:
+            raw_groq = os.getenv("GROQ_API_KEYS", "")
+        keys = [k.strip() for k in str(raw_groq).split(",") if k.strip()]
         if keys:
             for k in keys:
                 for model_name in ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']:
@@ -60,7 +63,10 @@ def translate_on_the_fly(summary_en):
     # 2. Try Gemini Fallback
     try:
         from google import genai
-        g_keys = [k.strip() for k in os.getenv('GEMINI_API_KEYS', '').split(',') if k.strip()]
+        raw_gemini = st.secrets.get("GEMINI_API_KEYS", "") if hasattr(st, "secrets") else ""
+        if not raw_gemini:
+            raw_gemini = os.getenv("GEMINI_API_KEYS", "")
+        g_keys = [k.strip() for k in str(raw_gemini).split(",") if k.strip()]
         if g_keys:
             for gk in g_keys:
                 try:
