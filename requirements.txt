@@ -1,0 +1,7 @@
+youtube-search
+youtube-transcript-api
+google-genai
+groq
+python-dotenv
+yt-dlp
+streamlit

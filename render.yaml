@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: guruhari-ashirwad-archive
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /_stcore/health
+    envVars:
+      - key: PORT
+        value: 8501
+      - key: GROQ_API_KEYS
+        sync: false
+      - key: GEMINI_API_KEYS
+        sync: false
+      - key: PLAYLIST_URL
+        value: https://www.youtube.com/playlist?list=PLOX7n0cygMYA19eaokQqliIzEhz--1BoK
+      - key: CHECK_INTERVAL_SECONDS
+        value: 600
