@@ -72,16 +72,20 @@ def main():
         print(f"[{count+1}/{len(to_translate)}] Translating: {info.get('title', vid_id)}")
         gu_text = translate_to_gujarati(info.get('summary'))
         if gu_text:
-            data[vid_id]['summary_gu'] = gu_text
+            try:
+                with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+                    current_db = json.load(f)
+                if vid_id in current_db:
+                    current_db[vid_id]['summary_gu'] = gu_text
+                    with open(INDEX_FILE, 'w', encoding='utf-8') as f:
+                        json.dump(current_db, f, indent=4, ensure_ascii=False)
+            except Exception as ex:
+                print(f"  -> Error saving entry: {ex}")
             count += 1
-            if count % 5 == 0:
-                with open(INDEX_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, indent=4, ensure_ascii=False)
-                print(f"  -> Progress saved ({count} translated).")
+            if count % 10 == 0:
+                print(f"  -> [PROGRESS] {count}/{len(to_translate)} Gujarati translations permanently committed!")
         time.sleep(0.5)
 
-    with open(INDEX_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
     print(f"Done! Successfully translated {count} videos.")
 
 if __name__ == "__main__":

@@ -32,23 +32,48 @@ img_prarthana = get_base64_image("assets/swami_prarthana.png")
 img_meditation = get_base64_image("assets/swami_meditation.png")
 img_reading = get_base64_image("assets/swami_reading.png")
 
-# Dynamic / Cached translation function using Groq
+# Dynamic / Cached translation function with dual Groq + Gemini fallback
 @st.cache_data(show_spinner=False)
 def translate_on_the_fly(summary_en):
     if not summary_en: return ""
+    # 1. Try Groq
     try:
         from groq import Groq
         keys = [k.strip() for k in os.getenv('GROQ_API_KEYS', '').split(',') if k.strip()]
-        if not keys: return summary_en
-        client = Groq(api_key=keys[0])
-        resp = client.chat.completions.create(
-            model='openai/gpt-oss-20b',
-            messages=[{'role': 'user', 'content': f'Translate this spiritual discourse summary into fluent, natural Gujarati. Return ONLY the Gujarati translation text with no English preamble:\n\n{summary_en}'}],
-            temperature=0.1
-        )
-        return resp.choices[0].message.content.strip()
-    except Exception as e:
-        return summary_en
+        if keys:
+            for k in keys:
+                try:
+                    client = Groq(api_key=k)
+                    resp = client.chat.completions.create(
+                        model='openai/gpt-oss-20b',
+                        messages=[{'role': 'user', 'content': f'Translate this spiritual discourse summary into fluent, natural Gujarati. Return ONLY the Gujarati translation text with no English preamble:\n\n{summary_en}'}],
+                        temperature=0.1
+                    )
+                    return resp.choices[0].message.content.strip()
+                except:
+                    continue
+    except Exception:
+        pass
+
+    # 2. Try Gemini Fallback
+    try:
+        from google import genai
+        g_keys = [k.strip() for k in os.getenv('GEMINI_API_KEYS', '').split(',') if k.strip()]
+        if g_keys:
+            for gk in g_keys:
+                try:
+                    client = genai.Client(api_key=gk)
+                    resp = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=f'Translate this spiritual discourse summary into fluent, natural Gujarati. Return ONLY the Gujarati translation text:\n\n{summary_en}'
+                    )
+                    return resp.text.strip()
+                except:
+                    continue
+    except Exception:
+        pass
+
+    return summary_en
 
 # Custom CSS for dark spiritual aesthetic, collage, and glassmorphism
 st.markdown("""
