@@ -32,26 +32,28 @@ img_prarthana = get_base64_image("assets/swami_prarthana.png")
 img_meditation = get_base64_image("assets/swami_meditation.png")
 img_reading = get_base64_image("assets/swami_reading.png")
 
-# Dynamic / Cached translation function with dual Groq + Gemini fallback
+# Dynamic / Cached translation function with multi-model rotation
 @st.cache_data(show_spinner=False)
 def translate_on_the_fly(summary_en):
     if not summary_en: return ""
-    # 1. Try Groq
+    # 1. Try Groq fast models (qwen3.8-27b has full unmetered quota)
     try:
         from groq import Groq
         keys = [k.strip() for k in os.getenv('GROQ_API_KEYS', '').split(',') if k.strip()]
         if keys:
             for k in keys:
-                try:
-                    client = Groq(api_key=k)
-                    resp = client.chat.completions.create(
-                        model='openai/gpt-oss-20b',
-                        messages=[{'role': 'user', 'content': f'Translate this spiritual discourse summary into fluent, natural Gujarati. Return ONLY the Gujarati translation text with no English preamble:\n\n{summary_en}'}],
-                        temperature=0.1
-                    )
-                    return resp.choices[0].message.content.strip()
-                except:
-                    continue
+                for model_name in ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b']:
+                    try:
+                        client = Groq(api_key=k)
+                        resp = client.chat.completions.create(
+                            model=model_name,
+                            messages=[{'role': 'user', 'content': f'Translate this spiritual discourse summary into fluent, natural Gujarati. Return ONLY the Gujarati translation text with no English:\n\n{summary_en}'}],
+                            temperature=0.1
+                        )
+                        text = resp.choices[0].message.content.strip()
+                        if text: return text
+                    except:
+                        continue
     except Exception:
         pass
 
@@ -64,10 +66,11 @@ def translate_on_the_fly(summary_en):
                 try:
                     client = genai.Client(api_key=gk)
                     resp = client.models.generate_content(
-                        model='gemini-2.5-flash',
+                        model='gemini-3.8-flash',
                         contents=f'Translate this spiritual discourse summary into fluent, natural Gujarati. Return ONLY the Gujarati translation text:\n\n{summary_en}'
                     )
-                    return resp.text.strip()
+                    text = resp.text.strip()
+                    if text: return text
                 except:
                     continue
     except Exception:
@@ -237,11 +240,11 @@ st.sidebar.caption("Continuous Intelligent Indexer & Spiritual Explorer")
 
 st.sidebar.divider()
 st.sidebar.header("📊 Archive Statistics")
-st.sidebar.metric(label="Total Discourses Indexed", value=len(index_data))
-st.sidebar.metric(label="Unique Spiritual Concepts", value=len(all_categories))
+st.sidebar.metric(label="Total Discourses", value=len(index_data))
+st.sidebar.metric(label="Spiritual Concepts", value=len(all_categories))
 
 gujarati_count = sum(1 for v in index_data.values() if v.get('summary_gu'))
-st.sidebar.metric(label="Gujarati Summaries", value=f"{gujarati_count} / {len(index_data)} (Auto-Translates Live!)")
+st.sidebar.metric(label="Gujarati Summaries", value=f"{gujarati_count} / {len(index_data)}")
 
 if st.sidebar.button("🔄 Refresh Database", use_container_width=True):
     st.rerun()
