@@ -24,6 +24,11 @@ gemini_keys_env = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
 gemini_api_keys = [k.strip() for k in gemini_keys_env.split(",") if k.strip()]
 current_gemini_idx = 0
 
+IS_ONCE_MODE = (os.getenv("RUN_ONCE", "false").lower() in ("true", "1") or "--once" in sys.argv)
+MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "25"))
+
+print(f"API Setup: {len(groq_api_keys)} Groq key(s), {len(gemini_api_keys)} Gemini key(s). Mode: {'BATCH (--once)' if IS_ONCE_MODE else 'CONTINUOUS DAEMON'}")
+
 def get_groq_client():
     if not groq_api_keys: return None
     return Groq(api_key=groq_api_keys[current_groq_idx])
@@ -155,6 +160,9 @@ def analyze_text_robust(transcript_text):
                         break
                         
         # 3. Exhausted All Keys
+        if IS_ONCE_MODE:
+            print("  -> All API Keys exhausted for this cycle. Exiting analyze_text_robust (batch mode).")
+            return None
         print("  -> Exhausted ALL API Keys on both services. Sleeping for 1 hour (3600s) to reset limits...")
         time.sleep(3600)
 
@@ -225,6 +233,9 @@ def analyze_audio_robust(temp_file):
                         break
                         
         # 3. Exhausted All Keys
+        if IS_ONCE_MODE:
+            print("  -> All Audio API Keys exhausted for this cycle. Exiting analyze_audio_robust (batch mode).")
+            return None
         print("  -> Exhausted ALL Audio API Keys on both services. Sleeping for 1 hour (3600s) to reset limits...")
         time.sleep(3600)
 
@@ -281,6 +292,9 @@ def main():
     index = load_index()
     print(f"Playlist contains {len(videos)} videos. Database currently has {len(index)} videos indexed.")
     
+    newly_indexed_count = 0
+    consecutive_fails = 0
+
     for video in videos:
         vid_id = video['id']
         
@@ -291,6 +305,7 @@ def main():
         analysis = index_video(video)
         
         if analysis:
+            consecutive_fails = 0
             cats = analysis.get('categories', [])
             summary_en = analysis.get('detailed_summary_en') or analysis.get('detailed_summary', '')
             summary_gu = analysis.get('detailed_summary_gu', '')
@@ -302,12 +317,21 @@ def main():
                 'summary_gu': summary_gu
             }
             save_index(index)
+            newly_indexed_count += 1
             if cats:
-                print(f"  -> Saved! Categories: {', '.join(cats)}")
+                print(f"  -> Saved! ({newly_indexed_count} indexed this run). Categories: {', '.join(cats)}")
             else:
                 print(f"  -> Saved as Uncategorized (No spiritual content found).")
+
+            if IS_ONCE_MODE and newly_indexed_count >= MAX_BATCH_SIZE:
+                print(f"\n[BATCH LIMIT REACHED] Successfully indexed {MAX_BATCH_SIZE} videos this run. Exiting to allow Git commit & push!")
+                break
         else:
+            consecutive_fails += 1
             print("  -> Failed to analyze. (Will retry in next cycle)")
+            if IS_ONCE_MODE and consecutive_fails >= 3:
+                print("\n[BATCH FINISHED] Encountered consecutive failures (API limits or temporary glitch). Exiting to commit current progress.")
+                break
             
         print("  -> Base Sleeping 2s...")
         time.sleep(2)

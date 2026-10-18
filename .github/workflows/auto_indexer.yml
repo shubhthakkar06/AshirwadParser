@@ -12,6 +12,7 @@ permissions:
 jobs:
   index-discourses:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,6 +39,7 @@ jobs:
           GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
           PLAYLIST_URL: "https://www.youtube.com/playlist?list=PLOX7n0cygMYA19eaokQqliIzEhz--1BoK"
           RUN_ONCE: "true"
+          MAX_BATCH_SIZE: 25
         run: |
           python indexer.py --once
 
@@ -46,4 +48,4 @@ jobs:
           git config --global user.name "BAPS Auto-Indexer Bot"
           git config --global user.email "bot@ashirwadparser.local"
           git add baps_video_index.json
-          git diff-index --quiet HEAD || (git commit -m "chore(database): auto-indexed new BAPS discourses [skip ci]" && git push)
+          git diff-index --quiet HEAD || (git commit -m "chore(database): auto-indexed new BAPS discourses [skip ci]" && git pull --rebase origin main && git push origin main)
