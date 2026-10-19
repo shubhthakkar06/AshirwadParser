@@ -33,6 +33,13 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Verify API Secrets
+        run: |
+          if [ -z "${{ secrets.GROQ_API_KEYS }}" ] && [ -z "${{ secrets.GEMINI_API_KEYS }}" ]; then
+            echo "::error::Neither GROQ_API_KEYS nor GEMINI_API_KEYS is configured in GitHub Repository Secrets! Please add them under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
       - name: Run Indexer Scan
         env:
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}

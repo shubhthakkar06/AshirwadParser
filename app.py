@@ -225,10 +225,29 @@ h1, h2, h3, h4 {
 </style>
 """, unsafe_allow_html=True)
 
+GITHUB_INDEX_URL = "https://raw.githubusercontent.com/shubhthakkar06/AshirwadParser/main/baps_video_index.json"
+
+@st.cache_data(ttl=60)
 def load_index():
+    # 1. Try to fetch the latest live index directly from GitHub repository
+    try:
+        import urllib.request
+        req = urllib.request.Request(GITHUB_INDEX_URL, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=4) as response:
+            if response.status == 200:
+                raw_data = json.loads(response.read().decode('utf-8'))
+                if raw_data and isinstance(raw_data, dict):
+                    return raw_data
+    except Exception:
+        pass
+
+    # 2. Fallback to local file
     if os.path.exists(INDEX_FILE):
-        with open(INDEX_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(INDEX_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
     return {}
 
 index_data = load_index()
@@ -263,6 +282,7 @@ gujarati_count = sum(1 for v in index_data.values() if v.get('summary_gu'))
 st.sidebar.metric(label="Gujarati Summaries", value=f"{gujarati_count} / {len(index_data)}")
 
 if st.sidebar.button("🔄 Refresh Database", use_container_width=True):
+    st.cache_data.clear()
     st.rerun()
 
 st.sidebar.divider()
