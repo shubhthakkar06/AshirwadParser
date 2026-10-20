@@ -26,6 +26,7 @@ current_gemini_idx = 0
 
 IS_ONCE_MODE = (os.getenv("RUN_ONCE", "false").lower() in ("true", "1") or "--once" in sys.argv)
 MAX_BATCH_SIZE = int(os.getenv("MAX_BATCH_SIZE", "25"))
+ALL_APIS_EXHAUSTED = False
 
 print(f"API Setup: {len(groq_api_keys)} Groq key(s), {len(gemini_api_keys)} Gemini key(s). Mode: {'BATCH (--once)' if IS_ONCE_MODE else 'CONTINUOUS DAEMON'}")
 
@@ -63,7 +64,16 @@ def save_index(index_data):
 
 def get_playlist_videos(url):
     print(f"Fetching video list from Playlist: {url}")
-    ydl_opts = {'extract_flat': 'in_playlist', 'quiet': True, 'no_warnings': True}
+    ydl_opts = {
+        'extract_flat': 'in_playlist',
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web']
+            }
+        }
+    }
     videos = []
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -142,7 +152,7 @@ def analyze_text_robust(transcript_text):
             for _ in range((len(gemini_api_keys) if gemini_api_keys else 1) * 3):
                 try:
                     resp = gemini_client.models.generate_content(
-                        model='gemini-3.8-flash', 
+                        model='gemini-3.5-flash', 
                         contents=payload, 
                         config=types.GenerateContentConfig(response_mime_type="application/json")
                     )
@@ -162,6 +172,8 @@ def analyze_text_robust(transcript_text):
         # 3. Exhausted All Keys
         if IS_ONCE_MODE:
             print("  -> All API Keys exhausted for this cycle. Exiting analyze_text_robust (batch mode).")
+            global ALL_APIS_EXHAUSTED
+            ALL_APIS_EXHAUSTED = True
             return None
         print("  -> Exhausted ALL API Keys on both services. Sleeping for 1 hour (3600s) to reset limits...")
         time.sleep(3600)
@@ -210,7 +222,7 @@ def analyze_audio_robust(temp_file):
                 try:
                     audio_file = gemini_client.files.upload(file=temp_file)
                     resp = gemini_client.models.generate_content(
-                        model='gemini-3.8-flash', 
+                        model='gemini-3.5-flash', 
                         contents=[audio_file, prompt], 
                         config=types.GenerateContentConfig(response_mime_type="application/json")
                     )
@@ -235,6 +247,8 @@ def analyze_audio_robust(temp_file):
         # 3. Exhausted All Keys
         if IS_ONCE_MODE:
             print("  -> All Audio API Keys exhausted for this cycle. Exiting analyze_audio_robust (batch mode).")
+            global ALL_APIS_EXHAUSTED
+            ALL_APIS_EXHAUSTED = True
             return None
         print("  -> Exhausted ALL Audio API Keys on both services. Sleeping for 1 hour (3600s) to reset limits...")
         time.sleep(3600)
@@ -253,7 +267,22 @@ def index_video(video):
     if not analysis:
         print(f"  -> Fetching audio for {video['title']}...")
         temp_file = os.path.join(tempfile.gettempdir(), f"{vid_id}.m4a")
-        ydl_opts = {'format': 'worstaudio[ext=m4a]/worst', 'outtmpl': temp_file, 'quiet': True, 'no_warnings': True}
+        ydl_opts = {
+            'format': 'ba/b',
+            'outtmpl': os.path.join(tempfile.gettempdir(), f"{vid_id}.%(ext)s"),
+            'quiet': True,
+            'no_warnings': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'ios', 'web']
+                }
+            },
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'm4a',
+                'preferredquality': '64',
+            }]
+        }
         
         for download_attempt in range(3):
             try:
@@ -265,14 +294,19 @@ def index_video(video):
                 time.sleep(5)
         
         if not os.path.exists(temp_file):
-            print("  -> Failed to download audio entirely. Skipping.")
-            return None
+            candidates = [os.path.join(tempfile.gettempdir(), f) for f in os.listdir(tempfile.gettempdir()) if f.startswith(vid_id) and f.endswith(('.m4a', '.mp3', '.opus', '.aac', '.mp4'))]
+            if candidates:
+                temp_file = candidates[0]
+            else:
+                print("  -> Failed to download audio entirely. Skipping.")
+                return None
             
         print("  -> Transcribing/Analyzing audio with Key Rotation System...")
         analysis = analyze_audio_robust(temp_file)
         
         try:
-            os.remove(temp_file)
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
         except:
             pass
             
@@ -329,8 +363,11 @@ def main():
         else:
             consecutive_fails += 1
             print("  -> Failed to analyze. (Will retry in next cycle)")
-            if IS_ONCE_MODE and consecutive_fails >= 3:
-                print("\n[BATCH FINISHED] Encountered consecutive failures (API limits or temporary glitch). Exiting to commit current progress.")
+            if ALL_APIS_EXHAUSTED:
+                print("\n[BATCH FINISHED] All API key quotas exhausted across Groq and Gemini. Exiting cleanly to commit progress.")
+                break
+            if IS_ONCE_MODE and consecutive_fails >= 8:
+                print("\n[BATCH FINISHED] Encountered 8 consecutive failures (temporary glitch or bot block). Exiting to commit current progress.")
                 break
             
         print("  -> Base Sleeping 2s...")

@@ -72,7 +72,7 @@ def translate_on_the_fly(summary_en):
                 try:
                     client = genai.Client(api_key=gk)
                     resp = client.models.generate_content(
-                        model='gemini-3.8-flash',
+                        model='gemini-3.5-flash',
                         contents=f'Translate this spiritual discourse summary into fluent, natural Gujarati. Return ONLY the Gujarati translation text:\n\n{summary_en}'
                     )
                     text = resp.text.strip()
