@@ -127,7 +127,7 @@ def analyze_text_robust(transcript_text):
                 try:
                     chat_completion = groq_client.chat.completions.create(
                         messages=[{"role": "user", "content": payload}],
-                        model="openai/gpt-oss-20b",
+                        model="qwen/qwen3.8-27b",
                         temperature=0.1,
                         response_format={"type": "json_object"}
                     )
