@@ -44,6 +44,7 @@ jobs:
         env:
           GROQ_API_KEYS: ${{ secrets.GROQ_API_KEYS }}
           GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
           PLAYLIST_URL: "https://www.youtube.com/playlist?list=PLOX7n0cygMYA19eaokQqliIzEhz--1BoK"
           RUN_ONCE: "true"
           MAX_BATCH_SIZE: 25

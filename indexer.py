@@ -15,6 +15,15 @@ load_dotenv()
 
 INDEX_FILE = "baps_video_index.json"
 PLAYLIST_URL = os.getenv("PLAYLIST_URL", "https://www.youtube.com/playlist?list=PLOX7n0cygMYA19eaokQqliIzEhz--1BoK")
+COOKIE_FILE = os.getenv("YOUTUBE_COOKIES_FILE", "cookies.txt")
+
+if not os.path.exists(COOKIE_FILE) and os.getenv("YOUTUBE_COOKIES"):
+    try:
+        with open(COOKIE_FILE, "w", encoding="utf-8") as f:
+            f.write(os.getenv("YOUTUBE_COOKIES").strip())
+        print("[COOKIES] Initialized cookies.txt from environment.")
+    except Exception as e:
+        print(f"[COOKIES] Warning: Could not write cookies file: {e}")
 
 groq_keys_env = os.getenv("GROQ_API_KEYS", os.getenv("GROQ_API_KEY", ""))
 groq_api_keys = [k.strip() for k in groq_keys_env.split(",") if k.strip()]
@@ -62,6 +71,22 @@ def save_index(index_data):
     with open(INDEX_FILE, 'w', encoding='utf-8') as f:
         json.dump(index_data, f, indent=4, ensure_ascii=False)
 
+def git_commit_and_push(total_indexed):
+    if IS_ONCE_MODE:
+        return
+    try:
+        import subprocess
+        subprocess.run(["git", "add", INDEX_FILE], check=True)
+        res = subprocess.run(["git", "diff-index", "--quiet", "HEAD"])
+        if res.returncode != 0:
+            commit_msg = f"chore(database): auto-indexed discourses (total {total_indexed} discourses)"
+            subprocess.run(["git", "commit", "-m", commit_msg], check=True)
+            subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=True)
+            subprocess.run(["git", "push", "origin", "main"], check=True)
+            print(f"  [GIT AUTO-SYNC] Successfully pushed progress to GitHub! Total in DB: {total_indexed}")
+    except Exception as e:
+        print(f"  [GIT AUTO-SYNC WARNING] Git auto-sync failed: {e}")
+
 def get_playlist_videos(url):
     print(f"Fetching video list from Playlist: {url}")
     ydl_opts = {
@@ -74,6 +99,8 @@ def get_playlist_videos(url):
             }
         }
     }
+    if os.path.exists(COOKIE_FILE):
+        ydl_opts['cookiefile'] = COOKIE_FILE
     videos = []
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -283,6 +310,8 @@ def index_video(video):
                 'preferredquality': '64',
             }]
         }
+        if os.path.exists(COOKIE_FILE):
+            ydl_opts['cookiefile'] = COOKIE_FILE
         
         for download_attempt in range(3):
             try:
@@ -357,6 +386,9 @@ def main():
             else:
                 print(f"  -> Saved as Uncategorized (No spiritual content found).")
 
+            if newly_indexed_count % 15 == 0:
+                git_commit_and_push(len(index))
+
             if IS_ONCE_MODE and newly_indexed_count >= MAX_BATCH_SIZE:
                 print(f"\n[BATCH LIMIT REACHED] Successfully indexed {MAX_BATCH_SIZE} videos this run. Exiting to allow Git commit & push!")
                 break
@@ -373,6 +405,9 @@ def main():
         print("  -> Base Sleeping 2s...")
         time.sleep(2)
         
+    if newly_indexed_count > 0:
+        git_commit_and_push(len(index))
+
     pending = [v for v in videos if v['id'] not in index]
     if pending:
         print(f"\n[SCAN COMPLETE] {len(pending)} video(s) pending or missed out of {len(videos)}.")
